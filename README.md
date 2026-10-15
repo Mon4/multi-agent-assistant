@@ -1,4 +1,4 @@
-# Advanced Autonomous Research Agent (AARA)
+# Advanced Autonomous Research Agent (AARA) — a multi-agent assistant built with Google ADK
 This project implements an advanced, multi-agent autonomous research system built using the **Google Agent Development Kit (ADK)** and **Gemini 2.5 Flash/Pro**. 
 It is designed to autonomously conduct research, synthesize information from multiple sources, and generate high-quality, professional documents.
 
@@ -18,6 +18,24 @@ The system follows a modular **"Plan-Execute-Critique-Refine"** architecture. It
 **RAG Agent**: Utilizes FAISS for in-memory vector search to query private, local knowledge bases.
 
 **Critique Agent**: Acts as the quality gate. It evaluates the logic and completeness of the synthesized answer, providing actionable feedback for the next iteration.
+
+## How It Works
+
+The manager operates in an autonomous **Research → Critique → Refine** loop (max. 3 iterations):
+
+```mermaid
+flowchart TD
+    U[User Query] --> M[Root Agent - Manager]
+    M --> W[Web Agent]
+    M --> F[Finance Agent - MCP]
+    M --> R[RAG Agent - FAISS]
+    W --> S[Synthesis]
+    F --> S
+    R --> S
+    S --> C{Critique Agent}
+    C -- "STATUS: APPROVED" --> O[Final Answer / Canvas Tool]
+    C -- "STATUS: NEEDS_REVISION" --> M
+```
 
 ## Key Features & Phases
 ### 1. Multi-Source Synthesis
@@ -51,11 +69,29 @@ Markdown formatting:
 
 ![markdown](images/plan.png)
 
+## Example Prompts
+
+Try these in the ADK Web UI (`adk web`):
+
+| Area | Example prompt |
+|---|---|
+| Finance (MCP) | `What is the current Bitcoin price in EUR?` |
+| Web search | `What are the latest AI news?` |
+| RAG (local PDF) | `What does Mercutio say about Queen Mab?` |
+| Canvas (report) | `Prepare a markdown report comparing BTC and ETH prices` |
+
+## Prerequisites
+
+- Python 3.10+
+- Docker Desktop (for the MCP fetch server)
+- Google account: Gemini API key ([AI Studio](https://aistudio.google.com/apikey)) and/or GCP project with Vertex AI enabled
+- (Optional) [Langfuse](https://cloud.langfuse.com) account for observability
+
 ## Installation & Setup
 1. Clone the repository:
 
 ```Bash
-git clone https://github.com/metrych-creator/multi-agent-assistant.git
+git clone https://github.com/Mon4/multi-agent-assistant.git
 cd multi-agent-assistant
 ```
 2. Create virtual environment and install dependencies from `requirements.txt`
@@ -78,4 +114,27 @@ docker run -p 8080:8080 mcp/fetch-server
    
 ```
 adk web
+```
+
+## Project Structure
+
+```
+multi-agent-assistant/
+├── personal_assistant/               # ADK agent package (manager + sub-agents)
+│   └── agent.py                      # Root orchestrator and agent definitions
+├── tools/
+│   ├── financial.py                  # MCP fetch-server bridge (Yahoo Finance data)
+│   ├── canvas.py                     # Report/code rendering (Jinja2 + Markdown)
+│   └── rag/                          # RAG pipeline
+│       ├── rag.py                    # Hybrid search: FAISS + BM25 + RRF + reranking
+│       ├── vector_store_manager.py   # FAISS index build & load
+│       ├── pdf_to_docs.py            # PDF parsing & chunking
+│       └── search_knowledge_base.py  # Tool exposed to the RAG agent
+├── templates/
+│   └── canvas_base.html              # Canvas output template
+├── data/
+│   └── romeo-and-juliet.pdf          # Knowledge base document
+├── images/                           # README screenshots
+├── requirement.txt                   # Python dependencies
+└── .env.example                      # Environment variables template
 ```
