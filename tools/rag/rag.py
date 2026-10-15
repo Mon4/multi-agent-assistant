@@ -1,18 +1,28 @@
-import os
+from functools import lru_cache
+
 from dotenv import load_dotenv
-from langchain.chat_models import init_chat_model
-from langfuse import get_client, observe
+from langfuse import observe
 from tools.rag.vector_store_manager import load_faiss, search_faiss
 import numpy as np
-from typing import List, Tuple, Dict, Optional
-from langchain_core.documents import Document
+from typing import List, Dict, Optional
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
-from langchain.agents import create_agent
 
-load_dotenv() 
-google_api_key = os.getenv("GOOGLE_API_KEY")
-answering_model = init_chat_model("google_genai:gemini-2.5-flash-lite")
+load_dotenv()
+
+
+@lru_cache(maxsize=4)
+def _get_retrieval_assets(pdf_path: str, embedding_model_name: str):
+    """Load the FAISS index + texts once per (pdf, model) and pre-build the BM25 corpus."""
+    faiss_store, pdf_texts = load_faiss(pdf_path, embedding_model_name)
+    bm25 = BM25Okapi([doc.split(" ") for doc in pdf_texts])
+    return faiss_store, pdf_texts, bm25
+
+
+@lru_cache(maxsize=1)
+def _get_reranker():
+    """Load the cross-encoder reranking model once and reuse it."""
+    return CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 
 
 def reciprocal_rank_fusion(faiss_results: List[Dict], bm25_results: List[Dict], k: int=100) -> List[str]:
@@ -44,21 +54,17 @@ def reciprocal_rank_fusion(faiss_results: List[Dict], bm25_results: List[Dict], 
 
 @observe()
 def search_with_rag(query: str, pdf_path: str, embedding_model_name: str='thenlper/gte-small', rerank: bool=False, top_k: int=100, 
-                          final_context_k_rerank: int=5, hybrid_serach: bool=False, metadata_filter: Optional[Dict[str, str]] =None) -> str:
-    # 1. RETRIEVAL
-    faiss_store, pdf_texts = load_faiss(pdf_path, embedding_model_name)
+                          final_context_k_rerank: int=5, hybrid_search: bool=False, metadata_filter: Optional[Dict[str, str]] =None) -> str:
+    # 1. RETRIEVAL (FAISS load, embedding model and BM25 corpus come from the cache)
+    faiss_store, pdf_texts, bm25 = _get_retrieval_assets(pdf_path, embedding_model_name)
     faiss_results = search_faiss(faiss_store, query, top_k=top_k, metadata_filter=metadata_filter)
 
     # 1A. SEMANTIC SEARCH - FAISS
     retrieved_docs = [res['text'] for res in faiss_results]
     final_context_docs = []
 
-    if hybrid_serach:
-        # 1B. LEXICAL (BM25)
-        tokenized_corpus = [doc.split(" ") for doc in pdf_texts] 
-        bm25 = BM25Okapi(tokenized_corpus)
-
-        # tokenize query
+    if hybrid_search:
+        # 1B. LEXICAL (BM25) — tokenized corpus is pre-built in _get_retrieval_assets
         tokenized_query = query.split(" ")
         bm25_scores = bm25.get_scores(tokenized_query)
 
@@ -73,7 +79,7 @@ def search_with_rag(query: str, pdf_path: str, embedding_model_name: str='thenlp
 
     # 2. RERANKING
     if rerank:
-        reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+        reranker = _get_reranker()
         query_doc_pairs = [[query, doc] for doc in top_n_docs]
         rerank_scores = reranker.predict(query_doc_pairs)
         scored_documents = list(zip(top_n_docs, rerank_scores))
@@ -83,7 +89,8 @@ def search_with_rag(query: str, pdf_path: str, embedding_model_name: str='thenlp
             key=lambda x: x[1],
             reverse=True)
         final_results = [doc for doc, score in reranked_documents_with_scores]
-        final_context_docs = final_results
+        # keep only the top N chunks as the final context
+        final_context_docs = final_results[:final_context_k_rerank]
     else:
         final_context_docs = top_n_docs[:final_context_k_rerank]
 

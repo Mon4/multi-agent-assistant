@@ -69,17 +69,6 @@ Markdown formatting:
 
 ![markdown](images/plan.png)
 
-## Example Prompts
-
-Try these in the ADK Web UI (`adk web`):
-
-| Area | Example prompt |
-|---|---|
-| Finance (MCP) | `What is the current Bitcoin price in EUR?` |
-| Web search | `What are the latest AI news?` |
-| RAG (local PDF) | `What does Mercutio say about Queen Mab?` |
-| Canvas (report) | `Prepare a markdown report comparing BTC and ETH prices` |
-
 ## Prerequisites
 
 - Python 3.10+
@@ -103,11 +92,10 @@ GCP_PROJECT_ID=[PROJECT_NAME]
 GCP_LOCATION=[LOCATION]
 ```
 
-4. Run the MCP Server (Docker):
+4. Docker for the Finance Agent (MCP): the tool spawns its own short-lived MCP fetch container per query — there is no server to keep running. Just make sure Docker is installed and pull the image once:
    
 ```Bash
 docker pull mcp/fetch-server
-docker run -p 8080:8080 mcp/fetch-server
 ```
 
 5. Launch the ADK Web Interface

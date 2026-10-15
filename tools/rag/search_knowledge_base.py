@@ -1,8 +1,11 @@
+from pathlib import Path
+
 from google.adk.tools.function_tool import FunctionTool
 from tools.rag.rag import search_with_rag
 import os
 
-PDF_PATH = "data/romeo-and-juliet.pdf"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PDF_PATH = str(PROJECT_ROOT / "data" / "romeo-and-juliet.pdf")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def search_knowledge_base(query: str) -> str:
@@ -15,10 +18,11 @@ def search_knowledge_base(query: str) -> str:
     """
     try:
         answer = search_with_rag(
-            query=query, 
+            query=query,
             pdf_path=PDF_PATH,
             rerank=True,
-            top_k=5
+            top_k=5,
+            hybrid_search=True
         )
         return str(answer)
     except Exception as e:

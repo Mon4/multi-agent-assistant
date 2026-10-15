@@ -1,18 +1,20 @@
+from datetime import datetime
+
 from google.adk.agents.llm_agent import Agent
 from google.adk.tools.google_search_tool import google_search
 from tools.rag.search_knowledge_base import rag_tool
 from google.adk.tools.agent_tool import AgentTool
 from tools.financial import financial_tool
-from datetime import datetime
 from tools.canvas import canvas_tool
 
-current_date_time = datetime.now().strftime("%A, %B %d, %Y, %H:%M")
 
-finance_agent = Agent(
-    model='gemini-2.5-pro',
-    name='finance_agent',
-    description="The PRIMARY tool for checking real-time stock prices, cryptocurrency rates (Bitcoin, ETH), and currency exchange rates. Don't use it for historic financial data.",
-    instruction=f"""
+def _current_date_time() -> str:
+    """Fresh timestamp - evaluated every time the agent resolves its instruction."""
+    return datetime.now().strftime("%A, %B %d, %Y, %H:%M")
+
+
+def _finance_instruction(ctx) -> str:
+    return f"""
     You are a financial market analyst.
     Your SOLE purpose is to fetch data about stocks, cryptocurrencies, or currencies using the 'fetch_financial_data' tool.
     
@@ -20,30 +22,41 @@ finance_agent = Agent(
     - If user asks about 'bitcoin', 'ethereum' or 'crypto', call tool with category='crypto'.
     - If user asks about 'dollar', 'euro', 'pln', call tool with category='currencies'.
 
-    Attach a timestamp - information where the given price was attached -> {current_date_time}
+    Attach a timestamp - information where the given price was attached -> {_current_date_time()}
     Attach your source of data. Name of the websites.
 
     Do NOT search the web. Use the provided tool ONLY.
-    """,
+    """
+
+
+finance_agent = Agent(
+    model='gemini-2.5-pro',
+    name='finance_agent',
+    description="The PRIMARY tool for checking real-time stock prices, cryptocurrency rates (Bitcoin, ETH), and currency exchange rates. Don't use it for historic financial data.",
+    instruction=_finance_instruction,
     tools=[financial_tool]
 )
 finance_agent_tool = AgentTool(agent=finance_agent)
 
-web_agent = Agent(
-    model='gemini-2.5-flash',
-    name='web_agent',
-    description='Useful for searching general news, history, weather, and facts. DO NOT use this for REAL-TIME financial market data (stocks, crypto, currencies).', 
-    instruction=f"""
+def _web_instruction(ctx) -> str:
+    return f"""
     You are a web researcher. Use Google Search to find public information.
 
-    CURRENT DATE AND TIME: {current_date_time}. 
+    CURRENT DATE AND TIME: {_current_date_time()}.
     Always use this date as your reference for 'today', 'yesterday', or 'tomorrow'.
     
     CRITICAL RULES:
     1. To find information, you MUST use the 'google_search' tool.
     2. DO NOT write Python code (e.g. do not write "print(google_search...)").
     3. Simply call the tool with the user's query.
-    """,
+    """
+
+
+web_agent = Agent(
+    model='gemini-2.5-flash',
+    name='web_agent',
+    description='Useful for searching general news, history, weather, and facts. DO NOT use this for REAL-TIME financial market data (stocks, crypto, currencies).', 
+    instruction=_web_instruction,
     tools = [google_search]
 )
 
@@ -63,14 +76,11 @@ web_agent_tool = AgentTool(agent=web_agent)
 rag_agent_tool = AgentTool(agent=rag_agent)
 
 
-critique_agent = Agent(
-    model='gemini-2.5-pro',
-    name='critique_agent',
-    description="CRITICAL: Use this tool to verify the completeness, and logic of a draft response before final delivery. Don't use it to check facts.",
-    instruction=f"""
+def _critique_instruction(ctx) -> str:
+    return f"""
     You are a Senior Quality Assurance Auditor. Your goal is to find flaws in the provided draft.
     
-    CURRENT DATE: {current_date_time}. 
+    CURRENT DATE: {_current_date_time()}.
     Always use this date as your reference for 'today', 'yesterday', or 'tomorrow'.
 
     EVALUATION CRITERIA:
@@ -81,6 +91,13 @@ critique_agent = Agent(
     - If the response is excellent, output: "STATUS: APPROVED".
     - If the response has gaps, output: "STATUS: NEEDS_REVISION" followed by a numbered list of specific missing facts or logical fixes.
     """
+
+
+critique_agent = Agent(
+    model='gemini-2.5-pro',
+    name='critique_agent',
+    description="CRITICAL: Use this tool to verify the completeness, and logic of a draft response before final delivery. Don't use it to check facts.",
+    instruction=_critique_instruction
 )
 critique_agent_tool = AgentTool(agent=critique_agent)
 

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from langchain_huggingface import HuggingFaceEmbeddings
 import os
 import pickle
@@ -6,8 +8,13 @@ from tools.rag.pdf_to_docs import get_pdf_as_document
 from typing import Tuple, List
 from langchain_core.documents import Document
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_FAISS_PATH = str(PROJECT_ROOT / "vector_stores" / "faiss_index")
 
-def load_faiss(pdf_path: str, embedding_model_name: str='thenlper/gte-small', faiss_path: str="vector_stores/faiss_index") -> Tuple[FAISS, List[str]]:
+
+def load_faiss(pdf_path: str, embedding_model_name: str='thenlper/gte-small', faiss_path: str=None) -> Tuple[FAISS, List[str]]:
+    if faiss_path is None:
+        faiss_path = DEFAULT_FAISS_PATH
     embedding_model = HuggingFaceEmbeddings(model_name=embedding_model_name)
     texts_path = faiss_path + "_texts.pkl"
 

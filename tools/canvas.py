@@ -1,9 +1,12 @@
+from pathlib import Path
+
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
 from jinja2 import Environment, FileSystemLoader
 from datetime import datetime
 import markdown
-import os
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 class CanvasInput(BaseModel):
     format: Literal["text", "report", "summary", "code"] = Field(..., description="The template type to use.")
@@ -17,7 +20,7 @@ def canvas_tool(data: CanvasInput):
     Renders the final result into a structured document (Canvas).
     """
     # Setup Jinja2 environment
-    env = Environment(loader=FileSystemLoader('templates'))
+    env = Environment(loader=FileSystemLoader(str(PROJECT_ROOT / 'templates')))
     template = env.get_template('canvas_base.html')
 
     html_output = template.render(
